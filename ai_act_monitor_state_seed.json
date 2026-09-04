@@ -1,0 +1,128 @@
+{
+  "ostatnia_aktualizacja": "2026-09-02T00:00:00+02:00",
+  "kamienie_milowe": [
+    {
+      "id": "zakazane_praktyki",
+      "nazwa": "Zakazane praktyki (Art. 5)",
+      "status": "obowiazuje",
+      "data_aktualna": "2025-02-02",
+      "data_pierwotna": "2025-02-02",
+      "opis_prostym_jezykiem": "Zakazane jest m.in. manipulowanie ludzmi za pomoca AI w sposob, ktorego nie sa swiadomi, ocenianie ludzi metoda \"social scoring\" oraz wykorzystywanie AI do wykorzystywania slabosci dzieci czy osob starszych.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "obowiazki_gpai",
+      "nazwa": "Obowiazki dla modeli AI ogolnego przeznaczenia",
+      "status": "obowiazuje",
+      "data_aktualna": "2025-08-02",
+      "data_pierwotna": "2025-08-02",
+      "opis_prostym_jezykiem": "Firmy tworzace duze modele AI ogolnego przeznaczenia (jak modele jezykowe) musza m.in. dokumentowac, jak trenowaly swoj model i jakie ma ograniczenia.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "ogolne_stosowanie_i_oznaczanie",
+      "nazwa": "Pelne stosowanie AI Act + czesciowe oznaczanie tresci (Art. 50)",
+      "status": "wchodzi_w_zycie",
+      "data_aktualna": "2026-08-02",
+      "data_pierwotna": "2026-08-02",
+      "opis_prostym_jezykiem": "AI Act zaczyna obowiazywac w pelnym zakresie. Nowe systemy generujace tresci (np. obrazy, glos) musza byc oznaczone jako wygenerowane przez AI.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "oznaczanie_legacy_i_nowe_zakazy",
+      "nazwa": "Oznaczanie tresci dla dzialajacych systemow + nowe zakazy",
+      "status": "przesuniete",
+      "data_aktualna": "2026-12-02",
+      "data_pierwotna": "2026-08-02",
+      "opis_prostym_jezykiem": "Systemy AI juz dzialajace na rynku tez beda musialy oznaczac generowane tresci. Zakazane stanie sie tworzenie falszywych, rozbierajacych zdjec bez zgody osoby przedstawionej.",
+      "ostatnia_zmiana": "Przesuniete Digital Omnibus (rozporzadzenie 2026/1744), w mocy od 27.07.2026",
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "piaskownice_i_akty_delegowane",
+      "nazwa": "Piaskownice regulacyjne + akty delegowane (Zalacznik I)",
+      "status": "nadchodzi",
+      "data_aktualna": "2027-08-02",
+      "data_pierwotna": "2027-08-02",
+      "opis_prostym_jezykiem": "Kazdy kraj UE musi uruchomic bezpieczne srodowisko testowe dla firm rozwijajacych AI. Komisja musi wydac szczegolowe przepisy dla AI wbudowanej w produkty.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "wysokie_ryzyko_zal_iii",
+      "nazwa": "Wysokie ryzyko - systemy samodzielne (Zalacznik III)",
+      "status": "przesuniete",
+      "data_aktualna": "2027-12-02",
+      "data_pierwotna": "2026-08-02",
+      "opis_prostym_jezykiem": "Firmy oferujace systemy AI wysokiego ryzyka (np. w rekrutacji, ocenie zdolnosci kredytowej) beda musialy spelnic dodatkowe wymogi bezpieczenstwa.",
+      "ostatnia_zmiana": "Przesuniete Digital Omnibus (rozporzadzenie 2026/1744), w mocy od 27.07.2026",
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "wysokie_ryzyko_zal_i",
+      "nazwa": "Wysokie ryzyko - AI wbudowana w produkty (Zalacznik I)",
+      "status": "przesuniete",
+      "data_aktualna": "2028-08-02",
+      "data_pierwotna": "2027-08-02",
+      "opis_prostym_jezykiem": "AI wbudowana w regulowane produkty (np. samochody, sprzet medyczny) przejdzie dodatkowa kontrole razem z certyfikacja produktu.",
+      "ostatnia_zmiana": "Przesuniete Digital Omnibus (rozporzadzenie 2026/1744), w mocy od 27.07.2026",
+      "zmieniono_w_tym_uruchomieniu": false
+    }
+  ],
+  "akty_wykonawcze": [],
+  "implementacja_pl": [
+    {
+      "id": "ustawa_pl_wejscie_w_zycie",
+      "nazwa": "Ustawa o systemach AI - wejscie w zycie",
+      "status": "obowiazuje",
+      "data_aktualna": "2026-08-11",
+      "data_pierwotna": "2026-08-11",
+      "opis_prostym_jezykiem": "Polska ustawa wdrazajaca unijny AI Act weszla w zycie. Okresla, kto w Polsce nadzoruje przestrzeganie przepisow o AI i jakie kary groza za ich lamanie.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "ustawa_pl_rozdzialy_glowne",
+      "nazwa": "Wejscie w zycie rozdzialow 3-5, 8, 9 (art. 8-18)",
+      "status": "nadchodzi",
+      "data_aktualna": "2026-10-28",
+      "data_pierwotna": "2026-10-28",
+      "opis_prostym_jezykiem": "Zaczna obowiazywac szczegolowe przepisy ustawy, dotyczace m.in. organizacji nadzoru nad AI w Polsce i zasad kontroli.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "kribsi_przewodniczacy",
+      "nazwa": "Powolanie przewodniczacego KRiBSI",
+      "status": "oczekiwane",
+      "data_aktualna": "2026-10-11",
+      "data_pierwotna": "2026-10-11",
+      "opis_prostym_jezykiem": "Sejm ma powolac, za zgoda Senatu, przewodniczacego nowej komisji nadzorujacej AI w Polsce (KRiBSI).",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "kribsi_pelny_sklad",
+      "nazwa": "Powolanie pelnego skladu KRiBSI",
+      "status": "oczekiwane",
+      "data_aktualna": "2026-11-11",
+      "data_pierwotna": "2026-11-11",
+      "opis_prostym_jezykiem": "Cala komisja nadzorujaca AI w Polsce ma zaczac dzialac w pelnym skladzie.",
+      "ostatnia_zmiana": null,
+      "zmieniono_w_tym_uruchomieniu": false
+    },
+    {
+      "id": "pl_piaskownica_regulacyjna",
+      "nazwa": "Polska piaskownica regulacyjna AI - budowa",
+      "status": "nadchodzi",
+      "data_aktualna": "2026-09-30",
+      "data_pierwotna": "2026-09-30",
+      "opis_prostym_jezykiem": "Panstwo buduje bezpieczne srodowisko, w ktorym firmy i urzedy beda mogly testowac systemy AI pod okiem regulatora, zanim trafia na rynek. CPPC prowadzi nabor na wykonawce centralnego portalu do 30 wrzesnia 2026, z budzetem 35 mln zl; sama piaskownica ma dzialac najpozniej od 2 sierpnia 2027, bo tego wymaga AI Act.",
+      "ostatnia_zmiana": "Nabor CPPC ogloszony, wnioski do 30.09.2026, budzet 35 mln zl. Operator: Ministerstwo Cyfryzacji z UODO, NASK, AGH Cyfronet i PCSS",
+      "zmieniono_w_tym_uruchomieniu": false
+    }
+  ]
+}

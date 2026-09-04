@@ -1,0 +1,574 @@
+{
+  "name": "AI Act & Implementacja PL - Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 6"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger---sobota",
+      "name": "Schedule Trigger - Sobota",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/home/node/.n8n-files/ai_act_monitor_state.json",
+        "options": {}
+      },
+      "id": "read-state",
+      "name": "Read State",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "id": "parse-state",
+      "name": "Parse State",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        440,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $input.first().json;\nconst items = state.data.kamienie_milowe;\n\nconst listaTekst = items.map(m => '- id: ' + m.id + ' | ' + m.nazwa + ' | obecny znany status: ' + m.status + ' | obecna znana data: ' + m.data_aktualna).join('\\n');\n\nconst systemPrompt = 'Jestes asystentem monitorujacym europejskie przepisy o sztucznej inteligencji (rozporzadzenie UE 2024/1689 wraz z nowelizacjami, m.in. Digital Omnibus 2026/1744). Sprawdzasz wylacznie fakty ze znalezionych zrodel, niczego nie zgadujesz. Zwracasz WYLACZNIE dane zgodne z podanym schematem JSON, bez zadnego dodatkowego tekstu ani komentarza.';\n\nconst userPrompt = 'Sprawdz, czy pojawily sie wiarygodne informacje o zmianie statusu lub daty ponizszych kamieni milowych AI Act:\\n\\n' + listaTekst + '\\n\\nStatus \"potwierdzona_zmiana\" mozesz nadac WYLACZNIE jesli informacja pochodzi z eur-lex.europa.eu lub digital-strategy.ec.europa.eu. Informacje z innych dozwolonych zrodel moga dac co najwyzej \"zapowiedziana_zmiana\". Brak nowych informacji = \"bez_zmian\".';\n\nconst body = {\n  model: 'sonar',\n  max_tokens: 4096,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user', content: userPrompt }\n  ],\n  response_format: {\n    type: 'json_schema',\n    json_schema: {\n      name: 'milestones_check',\n      schema: {\n        type: 'object',\n        properties: {\n          items: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                id: { type: 'string' },\n                ocena: { type: 'string', enum: ['bez_zmian', 'zapowiedziana_zmiana', 'potwierdzona_zmiana'] },\n                nowa_data: { type: ['string', 'null'] },\n                zrodlo_domena: { type: 'string' },\n                notatka: { type: 'string' }\n              },\n              required: ['id', 'ocena', 'zrodlo_domena', 'notatka']\n            }\n          }\n        },\n        required: ['items']\n      }\n    }\n  },\n  search_domain_filter: ['eur-lex.europa.eu', 'digital-strategy.ec.europa.eu', 'artificialintelligenceact.eu', 'iapp.org', 'euractiv.com', 'lexology.com'],\n  search_recency_filter: 'month'\n};\n\nreturn [{ json: { requestBody: body } }];"
+      },
+      "id": "code---zbuduj-request-kamienie",
+      "name": "Code - Zbuduj Request Kamienie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "id": "http-request---sonar-kamienie-milowe",
+      "name": "HTTP Request - Sonar Kamienie Milowe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Perplexity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: parsed }];"
+      },
+      "id": "code---parsuj-odpowiedz-kamienie",
+      "name": "Code - Parsuj Odpowiedz Kamienie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const previous = $('Parse State').first().json.data.kamienie_milowe || [];\nconst ocenyBy = {};\nfor (const o of $json.items) {\n  ocenyBy[o.id] = o;\n}\n\nconst oficjalne = ['eur-lex.europa.eu', 'digital-strategy.ec.europa.eu'];\n\nconst zaktualizowane = previous.map(item => {\n  const ocena = ocenyBy[item.id];\n  if (!ocena || ocena.ocena === 'bez_zmian') {\n    return { ...item, zmieniono_w_tym_uruchomieniu: false };\n  }\n  const zrodloOficjalne = oficjalne.some(d => (ocena.zrodlo_domena || '').includes(d));\n  if (ocena.ocena === 'potwierdzona_zmiana' && zrodloOficjalne) {\n    return {\n      ...item,\n      status: 'przesuniete',\n      data_aktualna: ocena.nowa_data || item.data_aktualna,\n      ostatnia_zmiana: ocena.notatka,\n      zmieniono_w_tym_uruchomieniu: true\n    };\n  }\n  if (item.status !== 'przesuniete') {\n    // sygnal branzowy: oznaczamy jako zmiane tylko jesli faktycznie cos nowego,\n    // inaczej ta sama plotka wracalaby w sekcji \"co sie zmienilo\" co tydzien\n    const nowosc = item.status !== 'zagrozony_zmiana' || item.ostatnia_zmiana !== ocena.notatka;\n    return {\n      ...item,\n      status: 'zagrozony_zmiana',\n      ostatnia_zmiana: ocena.notatka,\n      zmieniono_w_tym_uruchomieniu: nowosc\n    };\n  }\n  return { ...item, zmieniono_w_tym_uruchomieniu: false };\n});\n\nreturn [{ json: { kamienie_milowe: zaktualizowane } }];"
+      },
+      "id": "code---merge-ratchet-kamienie",
+      "name": "Code - Merge Ratchet Kamienie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const systemPrompt = 'Jestes precyzyjnym asystentem monitorujacym WYLACZNIE formalnie wydane akty prawne i oficjalne dokumenty wykonawcze do unijnego AI Act (rozporzadzenie 2024/1689): akty delegowane, akty wykonawcze (implementing regulations), oficjalne wytyczne (guidelines) Komisji Europejskiej lub AI Office publikowane jako formalna Komunikacja, oraz uznane Kodeksy Postepowania (np. GPAI Code of Practice). NIE zaliczaj do tej kategorii: artykulow informacyjnych, wpisow spolecznosciowych z platformy Futurium, poradnikow ani playbookow tworzonych przez spolecznosc, oswiadczen o prywatnosci/RODO, stron z czestymi pytaniami, narzedzi typu Explorer, komunikatow prasowych bez konkretnego aktu, ani niczego, co nie jest nazwanym, konkretnym aktem prawnym z tytulem lub numerem referencyjnym. Jesli po przeszukaniu zrodel nie znajdziesz ZADNEGO wpisu spelniajacego te kryteria, zwroc akty jako pusta tablice []. NIE twórz wpisu opisujacego brak wynikow, NIE wpisuj w pole tytul zdania w stylu \"brak potwierdzonych aktow\" - pusta tablica to jedyna poprawna odpowiedz w takim przypadku. Zwracasz WYLACZNIE dane zgodne ze schematem JSON.';\n\nconst userPrompt = 'Znajdz nowe lub zaktualizowane akty wykonawcze, delegowane, formalne wytyczne (guidelines) lub kody postepowania (codes of practice) FORMALNIE WYDANE lub zapowiedziane w ciagu ostatniego miesiaca w ramach AI Act. Pomin wszystko, co nie jest konkretnym, nazwanym instrumentem prawnym (patrz wykluczenia w instrukcji systemowej). Jesli nic takiego nie istnieje, zwroc pusta tablice akty: [] - to poprawna i oczekiwana odpowiedz, nie blad. Dla kazdego prawdziwego aktu podaj tytul, status, i opis wyjasniajacy prostym jezykiem, bez zargonu prawniczego ani technicznego, maksymalnie 2 zdania. Status przyjety_opublikowany tylko dla zrodel oficjalnych (eur-lex.europa.eu, digital-strategy.ec.europa.eu).';\n\nconst body = {\n  model: 'sonar',\n  max_tokens: 4096,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user', content: userPrompt }\n  ],\n  response_format: {\n    type: 'json_schema',\n    json_schema: {\n      name: 'executive_acts_check',\n      schema: {\n        type: 'object',\n        properties: {\n          akty: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                tytul: { type: 'string' },\n                status: { type: 'string', enum: ['zapowiedziany', 'w_konsultacjach', 'przyjety_opublikowany'] },\n                opis_prostym_jezykiem: { type: 'string' },\n                zrodlo_domena: { type: 'string' },\n                data_zdarzenia: { type: ['string', 'null'] }\n              },\n              required: ['tytul', 'status', 'opis_prostym_jezykiem', 'zrodlo_domena']\n            }\n          }\n        },\n        required: ['akty']\n      }\n    }\n  },\n  search_domain_filter: ['eur-lex.europa.eu', 'digital-strategy.ec.europa.eu', 'artificialintelligenceact.eu', 'iapp.org', 'lexology.com'],\n  search_recency_filter: 'month'\n};\n\nreturn [{ json: { requestBody: body } }];"
+      },
+      "id": "code---zbuduj-request-akty",
+      "name": "Code - Zbuduj Request Akty",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "id": "http-request---sonar-akty-wykonawcze",
+      "name": "HTTP Request - Sonar Akty Wykonawcze",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        500
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Perplexity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: parsed }];"
+      },
+      "id": "code---parsuj-odpowiedz-akty",
+      "name": "Code - Parsuj Odpowiedz Akty",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeKey(tytul) {\n  return (tytul || '')\n    .toLowerCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s]/g, '')\n    .split(/\\s+/)\n    .filter(w => w && !['the','on','w','sprawie','o','do','dla','i','oraz','of','and','for'].includes(w))\n    .slice(0, 6)\n    .join('_');\n}\n\nfunction pomin(item) {\n  const tekst = ((item.tytul || '') + ' ' + (item.opis_prostym_jezykiem || '')).toLowerCase();\n  const sygnalyPlaceholder = ['brak potwierdz', 'brak wynik', 'nie znaleziono', 'no confirmed', 'no new', 'no results', 'zadnych nowych'];\n  const sygnalyAdministracyjne = ['privacy statement', 'oswiadczenie o prywatnosci', 'polityka prywatnosci', 'cookie', 'accessibility statement', 'terms of use', 'disclaimer', 'faq'];\n  // jesli model sam zaprzecza kwalifikacji we wlasnym opisie - ufamy temu zaprzeczeniu bardziej niz polu status\n  const samozaprzeczenie = ['nie jest to samodzielny akt', 'nie jest to akt wykonawczy', 'nie jest aktem wykonawczym', 'nie jest wytyczn'];\n  const wszystkie = [...sygnalyPlaceholder, ...sygnalyAdministracyjne, ...samozaprzeczenie];\n  return wszystkie.some(s => tekst.includes(s));\n}\n\nconst previous = $('Parse State').first().json.data.akty_wykonawcze || [];\nconst nowe = ($json.akty || []).filter(a => !pomin(a));\nconst oficjalne = ['eur-lex.europa.eu', 'digital-strategy.ec.europa.eu'];\nconst statusRank = { zapowiedziany: 1, w_konsultacjach: 2, przyjety_opublikowany: 3 };\n\nconst mapa = {};\nfor (const p of previous) mapa[p.klucz] = { ...p, zmieniono_w_tym_uruchomieniu: false };\n\nconst dzis = new Date().toISOString().slice(0, 10);\n\nfor (const a of nowe) {\n  const klucz = normalizeKey(a.tytul);\n  const zrodloOficjalne = oficjalne.some(d => (a.zrodlo_domena || '').includes(d));\n  const faktycznyStatus = (a.status === 'przyjety_opublikowany' && !zrodloOficjalne) ? 'w_konsultacjach' : a.status;\n\n  if (!mapa[klucz]) {\n    mapa[klucz] = {\n      klucz: klucz,\n      tytul: a.tytul,\n      status: faktycznyStatus,\n      opis_prostym_jezykiem: a.opis_prostym_jezykiem,\n      zrodlo_domena: a.zrodlo_domena,\n      data_zdarzenia: a.data_zdarzenia || null,\n      pierwsza_wzmianka: dzis,\n      zmieniono_w_tym_uruchomieniu: true\n    };\n  } else {\n    const obecny = mapa[klucz];\n    if ((statusRank[faktycznyStatus] || 0) > (statusRank[obecny.status] || 0)) {\n      mapa[klucz] = {\n        ...obecny,\n        status: faktycznyStatus,\n        opis_prostym_jezykiem: a.opis_prostym_jezykiem || obecny.opis_prostym_jezykiem,\n        zrodlo_domena: a.zrodlo_domena,\n        data_zdarzenia: a.data_zdarzenia || obecny.data_zdarzenia || null,\n        zmieniono_w_tym_uruchomieniu: true\n      };\n    } else {\n      mapa[klucz] = { ...obecny, zmieniono_w_tym_uruchomieniu: false };\n    }\n  }\n}\n\nreturn [{ json: { akty_wykonawcze: Object.values(mapa) } }];"
+      },
+      "id": "code---merge-ratchet-akty",
+      "name": "Code - Merge Ratchet Akty",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $input.first().json;\nconst items = state.data.implementacja_pl;\nconst listaTekst = items.map(m => '- id: ' + m.id + ' | ' + m.nazwa + ' | obecny znany status: ' + m.status + ' | obecna znana data: ' + m.data_aktualna).join('\\n');\n\nconst systemPrompt = 'Jestes asystentem monitorujacym wdrozenie unijnego AI Act w Polsce (ustawa o systemach sztucznej inteligencji z 3 lipca 2026, Komisja Rozwoju i Bezpieczenstwa Sztucznej Inteligencji - KRiBSI). Dla nowych elementow spoza znanej listy stosujesz te same rygorystyczne kryteria co przy aktach wykonawczych: tylko formalnie wydane rozporzadzenia wykonawcze, oficjalne obwieszczenia ministerstwa lub UODO, lub inne konkretne, nazwane dzialania formalne. NIE zaliczaj: artykulow informacyjnych i wpisow blogowych, poradnikow, list kontrolnych i materialow pomocniczych, FAQ, naborow, konkursow i ogloszen o dofinansowanie, komunikatow o ustanowieniu programow badawczych lub wspierajacych, konsultacji spolecznych bez opublikowanego projektu aktu. Nowy element musi byc nazwanym aktem prawnym albo formalnym obwieszczeniem organu, z data lub numerem. Jesli nie znajdziesz zadnych nowych elementow spelniajacych kryteria, zwroc nowe_elementy jako pusta tablice [] - NIE twórz wpisu opisujacego brak wynikow. Zwracasz WYLACZNIE dane zgodne ze schematem JSON.';\n\nconst userPrompt = 'Sprawdz status ponizszych elementow implementacji ustawy o systemach AI w Polsce:\\n\\n' + listaTekst + '\\n\\nDodatkowo: czy pojawily sie nowe rozporzadzenia wykonawcze do tej ustawy, nowe formalne obwieszczenia Ministerstwa Cyfryzacji lub UODO, albo inne konkretne, formalne wydarzenia we wdrozeniu, ktore nie pasuja do powyzszej listy? Jesli tak, opisz je prostym jezykiem, bez zargonu prawniczego, maksymalnie 2 zdania. Jesli nic takiego nie ma, zwroc nowe_elementy: [] - to poprawna odpowiedz, nie blad.';\n\nconst body = {\n  model: 'sonar',\n  max_tokens: 4096,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user', content: userPrompt }\n  ],\n  response_format: {\n    type: 'json_schema',\n    json_schema: {\n      name: 'pl_implementation_check',\n      schema: {\n        type: 'object',\n        properties: {\n          items: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                id: { type: 'string' },\n                ocena: { type: 'string', enum: ['bez_zmian', 'zapowiedziana_zmiana', 'potwierdzona_zmiana'] },\n                nowa_data: { type: ['string', 'null'] },\n                zrodlo_domena: { type: 'string' },\n                notatka: { type: 'string' }\n              },\n              required: ['id', 'ocena', 'zrodlo_domena', 'notatka']\n            }\n          },\n          nowe_elementy: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                tytul: { type: 'string' },\n                opis_prostym_jezykiem: { type: 'string' },\n                status: { type: 'string', enum: ['zapowiedziany', 'w_konsultacjach', 'przyjety_opublikowany'] },\n                zrodlo_domena: { type: 'string' }\n              },\n              required: ['tytul', 'opis_prostym_jezykiem', 'status', 'zrodlo_domena']\n            }\n          }\n        },\n        required: ['items', 'nowe_elementy']\n      }\n    }\n  },\n  search_domain_filter: ['gov.pl', 'uodo.gov.pl', 'sejm.gov.pl', 'eli.gov.pl', 'iapp.org', 'lexology.com'],\n  search_recency_filter: 'month'\n};\n\nreturn [{ json: { requestBody: body } }];"
+      },
+      "id": "code---zbuduj-request-pl",
+      "name": "Code - Zbuduj Request PL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "id": "http-request---sonar-implementacja-pl",
+      "name": "HTTP Request - Sonar Implementacja PL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        800
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Perplexity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: parsed }];"
+      },
+      "id": "code---parsuj-odpowiedz-pl",
+      "name": "Code - Parsuj Odpowiedz PL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function wygladaJakPlaceholder(item) {\n  const tekst = ((item.tytul || '') + ' ' + (item.opis_prostym_jezykiem || '') + ' ' + (item.status || '')).toLowerCase();\n  const sygnaly = [\n    'brak potwierdz', 'brak wynik', 'nie znaleziono', 'no confirmed', 'no new', 'no results', 'zadnych nowych',\n    'nie jest to samodzielny akt', 'nie jest to akt wykonawczy', 'nie jest aktem wykonawczym', 'nie jest wytyczn',\n    'informacja ogolna', 'bez nowego formalnego', 'brak nowego formalnego', 'nie jest formaln', 'general information', 'no new formal',\n    'nie jest decyzj', 'nie stanowi formalnego', 'nie stanowi aktu'\n  ];\n  return sygnaly.some(s => tekst.includes(s));\n}\n\nfunction normalizeKey(tytul) {\n  return (tytul || '')\n    .toLowerCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s]/g, '')\n    .split(/\\s+/)\n    .filter(w => w && !['the','on','w','sprawie','o','do','dla','i','oraz','of','and','for'].includes(w))\n    .slice(0, 6)\n    .join('_');\n}\n\nconst previous = $('Parse State').first().json.data.implementacja_pl || [];\nconst ocenyBy = {};\nfor (const o of $json.items) ocenyBy[o.id] = o;\n\nconst oficjalne = ['gov.pl', 'uodo.gov.pl', 'sejm.gov.pl', 'eli.gov.pl'];\n\nconst zaktualizowane = previous.map(item => {\n  const ocena = ocenyBy[item.id];\n  if (!ocena || ocena.ocena === 'bez_zmian') {\n    return { ...item, zmieniono_w_tym_uruchomieniu: false };\n  }\n  const zrodloOficjalne = oficjalne.some(d => (ocena.zrodlo_domena || '').includes(d));\n  if (ocena.ocena === 'potwierdzona_zmiana' && zrodloOficjalne) {\n    return {\n      ...item,\n      status: 'zaktualizowany',\n      data_aktualna: ocena.nowa_data || item.data_aktualna,\n      ostatnia_zmiana: ocena.notatka,\n      zmieniono_w_tym_uruchomieniu: true\n    };\n  }\n  if (item.status !== 'zaktualizowany') {\n    const nowosc = item.status !== 'zagrozony_zmiana' || item.ostatnia_zmiana !== ocena.notatka;\n    return {\n      ...item,\n      status: 'zagrozony_zmiana',\n      ostatnia_zmiana: ocena.notatka,\n      zmieniono_w_tym_uruchomieniu: nowosc\n    };\n  }\n  return { ...item, zmieniono_w_tym_uruchomieniu: false };\n});\n\n// Klucz liczymy z tytulu, a dla wpisow juz zapisanych bierzemy id ALBO\n// odtwarzamy klucz z nazwy - inaczej wpis zapisany kiedys bez id nie blokuje\n// ponownego dodania tego samego elementu. Set rosnie w trakcie petli, wiec\n// lapie tez duplikaty w obrebie jednej odpowiedzi modelu.\n// Nowe elementy NIE wchodza do sledzonego stanu. Powod: model potrafi zwrocic\n// rzecz, ktora w swoim wlasnym opisie dyskwalifikuje, i potrafi opisac ten sam\n// fakt innym tytulem niz pozycja juz sledzona - wtedy zaden klucz tego nie zlapie.\n// Ida wiec do maila jako sygnaly do recznego sprawdzenia. Jesli ktorys okaze sie\n// realny, dopisujemy go recznie jako stala pozycje z wlasnym opisem.\nconst kluczWpisu = (x) => x.id || ('pl_' + normalizeKey(x.nazwa || x.tytul));\nconst znaneKlucze = new Set(zaktualizowane.map(kluczWpisu));\n\nconst sygnaly = [];\nfor (const n of ($json.nowe_elementy || [])) {\n  if (wygladaJakPlaceholder(n)) continue;\n  const klucz = 'pl_' + normalizeKey(n.tytul);\n  if (znaneKlucze.has(klucz)) continue;   // nie powtarzaj tego, co juz sledzimy\n  znaneKlucze.add(klucz);                 // ani tego samego dwa razy w jednej odpowiedzi\n  sygnaly.push({\n    tytul: n.tytul,\n    opis_prostym_jezykiem: n.opis_prostym_jezykiem,\n    zrodlo_domena: n.zrodlo_domena\n  });\n}\n\nreturn [{ json: { implementacja_pl: zaktualizowane, sygnaly: sygnaly } }];"
+      },
+      "id": "code---merge-ratchet-pl",
+      "name": "Code - Merge Ratchet PL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const kamienie = $('Code - Merge Ratchet Kamienie').first().json.kamienie_milowe;\nconst akty = $('Code - Merge Ratchet Akty').first().json.akty_wykonawcze;\nconst plNode = $('Code - Merge Ratchet PL').first().json;\nconst pl = plNode.implementacja_pl;\nconst sygnaly = plNode.sygnaly || [];\n\nconst stan = {\n  ostatnia_aktualizacja: new Date().toISOString(),\n  kamienie_milowe: kamienie,\n  akty_wykonawcze: akty,\n  implementacja_pl: pl\n};\n\n// sygnaly celowo poza obiektem 'stan' - do maila tak, na dysk nie\nreturn [{ json: { stan: stan, sygnaly: sygnaly } }];"
+      },
+      "id": "code---combine-all-sections",
+      "name": "Code - Combine All Sections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const stanJson = JSON.stringify($json.stan, null, 2);\nconst binary = await this.helpers.prepareBinaryData(Buffer.from(stanJson, 'utf-8'), 'ai_act_monitor_state.json', 'application/json');\nreturn [{ json: { stan: $json.stan }, binary: { data: binary } }];"
+      },
+      "id": "code---convert-to-binary",
+      "name": "Code - Convert to Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/ai_act_monitor_state.json",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "write-state",
+      "name": "Write State",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const wejscie = $('Code - Combine All Sections').first().json;\nconst stan = wejscie.stan;\nconst sygnaly = wejscie.sygnaly || [];\n\nfunction ikona(status) {\n  const map = {\n    obowiazuje: '\\u2705',\n    wchodzi_w_zycie: '\\ud83d\\udfe1',\n    nadchodzi: '\\u23f3',\n    zagrozony_zmiana: '\\u26a0\\ufe0f',\n    przesuniete: '\\ud83d\\udd04',\n    oczekiwane: '\\u23f3',\n    zaktualizowany: '\\ud83d\\udd04',\n    zapowiedziany: '\\ud83c\\udd95',\n    w_konsultacjach: '\\ud83d\\udcdd',\n    przyjety_opublikowany: '\\u2705'\n  };\n  return map[status] || '\\u2022';\n}\n\nfunction formatujDate(d) {\n  return d ? d : 'brak daty';\n}\n\n// tytuly i opisy pochodza od modelu - bez escapowania jeden znak < psuje cala tabele\nfunction esc(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\n}\n\nconst zmiany = [];\nfor (const item of stan.kamienie_milowe) {\n  if (item.zmieniono_w_tym_uruchomieniu) zmiany.push('<li><strong>' + esc(item.nazwa) + ':</strong> ' + esc(item.ostatnia_zmiana) + '</li>');\n}\nfor (const item of stan.akty_wykonawcze) {\n  if (item.zmieniono_w_tym_uruchomieniu) zmiany.push('<li><strong>' + esc(item.tytul) + ':</strong> ' + esc(item.opis_prostym_jezykiem) + '</li>');\n}\nfor (const item of stan.implementacja_pl) {\n  if (item.zmieniono_w_tym_uruchomieniu) zmiany.push('<li><strong>' + esc(item.nazwa) + ':</strong> ' + esc(item.ostatnia_zmiana) + '</li>');\n}\n\nconst sekcjaZmiany = zmiany.length\n  ? '<h2>Co sie zmienilo od ostatniego tygodnia</h2><ul>' + zmiany.join('') + '</ul>'\n  : '<h2>Co sie zmienilo od ostatniego tygodnia</h2><p>Nic sie nie zmienilo - wszystko zgodnie z poprzednim stanem.</p>';\n\nconst wierszKamien = i => '<tr><td>' + ikona(i.status) + '</td><td><strong>' + esc(i.nazwa) + '</strong><br><span style=\"color:#555;font-size:14px;\">' + esc(i.opis_prostym_jezykiem) + '</span></td><td>' + esc(formatujDate(i.data_aktualna)) + '</td></tr>';\n\nconst sekcjaKamienie = '<h2>Harmonogram AI Act</h2><table style=\"width:100%;border-collapse:collapse;\">' + stan.kamienie_milowe.map(wierszKamien).join('') + '</table>';\n\nconst sekcjaPL = '<h2>Wdrozenie w Polsce</h2><table style=\"width:100%;border-collapse:collapse;\">' + stan.implementacja_pl.map(wierszKamien).join('') + '</table>';\n\nconst sekcjaAkty = stan.akty_wykonawcze.length\n  ? '<h2>Akty wykonawcze i wytyczne</h2><table style=\"width:100%;border-collapse:collapse;\">' + stan.akty_wykonawcze.map(a => '<tr><td>' + ikona(a.status) + '</td><td><strong>' + esc(a.tytul) + '</strong>' + (a.data_zdarzenia ? ' <span style=\"color:#999;font-size:13px;\">(' + esc(a.data_zdarzenia) + ')</span>' : '') + '<br><span style=\"color:#555;font-size:14px;\">' + esc(a.opis_prostym_jezykiem) + '</span></td></tr>').join('') + '</table>'\n  : '<h2>Akty wykonawcze i wytyczne</h2><p>Brak nowych aktow w tym tygodniu.</p>';\n\nconst sekcjaSygnaly = sygnaly.length\n  ? '<h2>Sygnaly do sprawdzenia</h2>' +\n    '<p style=\"color:#777;font-size:14px;\">Znalezione w tym tygodniu, ale niezweryfikowane. To nie sa sledzone pozycje - jesli ktoras okaze sie istotna, dopisz ja recznie do pliku stanu.</p>' +\n    '<ul>' + sygnaly.map(s => '<li><strong>' + esc(s.tytul) + '</strong> <span style=\"color:#999;font-size:13px;\">' + esc(s.zrodlo_domena) + '</span><br><span style=\"color:#555;font-size:14px;\">' + esc(s.opis_prostym_jezykiem) + '</span></li>').join('') + '</ul>'\n  : '';\n\nconst html = '<div style=\"font-family:Arial,sans-serif;max-width:640px;margin:0 auto;\">' +\n  '<h1>Cotygodniowy przeglad: AI Act i wdrozenie w Polsce</h1>' +\n  '<p style=\"color:#777;\">' + new Date().toLocaleDateString('pl-PL') + '</p>' +\n  sekcjaZmiany + sekcjaKamienie + sekcjaPL + sekcjaAkty + sekcjaSygnaly +\n  '<hr><p style=\"color:#999;font-size:12px;\">Kolejne sprawdzenie: za tydzien, w sobote o 9:00. Zrodla: EUR-Lex, Komisja Europejska/AI Office, Sejm, gov.pl, UODO oraz wybrane serwisy branzowe.</p>' +\n  '</div>';\n\nreturn [{ json: { subject: 'Cotygodniowy przeglad: AI Act i wdrozenie w Polsce', html: html } }];"
+      },
+      "id": "code---build-html-email",
+      "name": "Code - Build HTML Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "TWOJ_EMAIL@example.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "gmail---wyslij-podsumowanie",
+      "name": "Gmail - Wyslij Podsumowanie",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2640,
+        500
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3
+      },
+      "id": "merge-combine-branches",
+      "name": "Merge - Combine Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - Sobota": {
+      "main": [
+        [
+          {
+            "node": "Read State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read State": {
+      "main": [
+        [
+          {
+            "node": "Parse State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse State": {
+      "main": [
+        [
+          {
+            "node": "Code - Zbuduj Request Kamienie",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Zbuduj Request Akty",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Zbuduj Request PL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Zbuduj Request Kamienie": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Sonar Kamienie Milowe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Sonar Kamienie Milowe": {
+      "main": [
+        [
+          {
+            "node": "Code - Parsuj Odpowiedz Kamienie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parsuj Odpowiedz Kamienie": {
+      "main": [
+        [
+          {
+            "node": "Code - Merge Ratchet Kamienie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Zbuduj Request Akty": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Sonar Akty Wykonawcze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Sonar Akty Wykonawcze": {
+      "main": [
+        [
+          {
+            "node": "Code - Parsuj Odpowiedz Akty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parsuj Odpowiedz Akty": {
+      "main": [
+        [
+          {
+            "node": "Code - Merge Ratchet Akty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Zbuduj Request PL": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Sonar Implementacja PL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Sonar Implementacja PL": {
+      "main": [
+        [
+          {
+            "node": "Code - Parsuj Odpowiedz PL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parsuj Odpowiedz PL": {
+      "main": [
+        [
+          {
+            "node": "Code - Merge Ratchet PL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Merge Ratchet PL": {
+      "main": [
+        [
+          {
+            "node": "Merge - Combine Branches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Code - Combine All Sections": {
+      "main": [
+        [
+          {
+            "node": "Code - Convert to Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Convert to Binary": {
+      "main": [
+        [
+          {
+            "node": "Write State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write State": {
+      "main": [
+        [
+          {
+            "node": "Code - Build HTML Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Build HTML Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Wyslij Podsumowanie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Merge Ratchet Kamienie": {
+      "main": [
+        [
+          {
+            "node": "Merge - Combine Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Merge Ratchet Akty": {
+      "main": [
+        [
+          {
+            "node": "Merge - Combine Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - Combine Branches": {
+      "main": [
+        [
+          {
+            "node": "Code - Combine All Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Warsaw"
+  },
+  "pinData": {}
+}
