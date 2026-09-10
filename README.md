@@ -134,4 +134,4 @@ Hostinger VPS (KVM) · Docker · n8n self-hosted (v2.33.6) · Perplexity Sonar A
 
 ---
 
-Built as one of several small agents I use to work out where these tools genuinely hold and where they break. Sibling agent: [motogp-calendar-monitor](https://github.com/bartosz-szubert/motogp-calendar-monitor).
+*Sibling repositories: [motogp-calendar-monitor](https://github.com/bartosz-szubert/motogp-calendar-monitor) — the same ratchet idea, applied to a race calendar instead of EU regulation. [human-gated-agent](https://github.com/bartosz-szubert/human-gated-agent) — the pattern both of these were extracted into.*
