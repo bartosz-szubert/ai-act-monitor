@@ -134,4 +134,4 @@ Hostinger VPS (KVM) · Docker · n8n self-hosted (v2.33.6) · Perplexity Sonar A
 
 ---
 
-*Sibling repositories: [motogp-calendar-monitor](https://github.com/bartosz-szubert/motogp-calendar-monitor) — the same ratchet idea, applied to a race calendar instead of EU regulation. [human-gated-agent](https://github.com/bartosz-szubert/human-gated-agent) — the pattern both of these were extracted into.*
+*Sibling repositories: [motogp-calendar-monitor](https://github.com/bartosz-szubert/motogp-calendar-monitor) — the same ratchet idea, applied to a race calendar instead of EU regulation. [human-gated-agent](https://github.com/bartosz-szubert/human-gated-agent) — the pattern both of these were extracted into. [daily-dinner-ideas-agent](https://github.com/bartosz-szubert/daily-dinner-ideas-agent) — a daily Gemini email where a hard rule from the prompt is checked again in code before sending.*
