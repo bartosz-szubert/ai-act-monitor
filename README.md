@@ -135,3 +135,5 @@ Hostinger VPS (KVM) · Docker · n8n self-hosted (v2.33.6) · Perplexity Sonar A
 ---
 
 *Sibling repositories: [motogp-calendar-monitor](https://github.com/bartosz-szubert/motogp-calendar-monitor) — the same ratchet idea, applied to a race calendar instead of EU regulation. [human-gated-agent](https://github.com/bartosz-szubert/human-gated-agent) — the pattern both of these were extracted into. [daily-dinner-ideas-agent](https://github.com/bartosz-szubert/daily-dinner-ideas-agent) — a daily Gemini email where a hard rule from the prompt is checked again in code before sending.*
+
+*Outside n8n: [hermes-second-brain](https://github.com/bartosz-szubert/hermes-second-brain) — a self-hosted personal agent on an Obsidian knowledge base that writes only what a human approves.*
